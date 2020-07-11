@@ -57,10 +57,11 @@ def getCameraMatrix(motionMatrix, whichFrame):
     """
         Get the required camera matrix from the motion matrix after SVD decompostion
     """
-    startOfMatrix = whichFrame * 2
-    endOfMatrix = startOfMatrix + 2
+    firstRow  = motionMatrix[whichFrame]
+    secondRow = motionMatrix[whichFrame + 10]
 
-    return motionMatrix[startOfMatrix : endOfMatrix]
+    m = np.concatenate((firstRow, secondRow), axis = 0)
+    return np.reshape(m, (2, 3))
 
 def getTanslationVector(xTranslationInFrames, yTranslationInFrames, whichFrame):
     """
@@ -86,6 +87,22 @@ def createProjectionMatrix(cameraMatrix, translationVector):
     P = np.concatenate((upperSideP, bottomP), axis = 0)
     return P
 
+def applyProjectPoints(cameraMatrix, worldPoints):
+    """
+        Applies the project points function to projec the
+        3D world points into an image plane
+    """
+    row, col = worldPoints.shape
+    m = np.concatenate((cameraMatrix, np.array([[0, 0, 1]])))
+
+    rvec = np.array([0, 0, 0], dtype = np.float)
+    tvec = np.array([0, 0, 1], dtype = np.float)
+
+    points, _ = cv2.projectPoints(worldPoints, rvec, tvec, m, ())
+    points = np.reshape(points, (row, 2))
+
+    return points
+
 def getWorldAndImageCoordinates(whichFrame):
     """
         Read the X and Y points.
@@ -95,7 +112,7 @@ def getWorldAndImageCoordinates(whichFrame):
         Calculate the projection matrix.
         Project the 3d world points to an image plane.
 
-        Return both 3d world points and projects points.
+        Return both 3d world points and projected points.
     """
 
     xList = readData("xPoints.csv")
@@ -128,6 +145,9 @@ def getWorldAndImageCoordinates(whichFrame):
     translationVector = getTanslationVector(xTranslationInFrames, yTranslationInFrames, frameIndex)
     P = createProjectionMatrix(cameraMatrix, translationVector)
 
+    # apply projectPoints function to project the 3D points into 2D image plane
+    pointsFromProjectionMatrix = applyProjectPoints(cameraMatrix, worldPoints)
+
     # project world coordinates to image plane using the projection matrix
     imageCoordinates = []
     for point in worldPoints:
@@ -140,7 +160,17 @@ def getWorldAndImageCoordinates(whichFrame):
         coordinate = np.array([x, y])
         imageCoordinates.append(coordinate)
 
-    return worldPoints, imageCoordinates
+    return worldPoints, imageCoordinates, pointsFromProjectionMatrix
+
+def showWithScatter(points):
+    """
+        Plot the points retrieved from projectPoints function
+    """
+    x = points[:, 0]
+    y = points[:, 1]
+
+    plt.plot(x, y,  color = "black")
+    plt.show()
 
 def show2D(imageCoordinates):
     """
@@ -171,7 +201,9 @@ def show3D(worldPoints):
     ax.scatter3D(xPts, yPts, zPts, c = zPts, cmap = "ocean")
     plt.show()
 
-frameNum = 0
-worldPoints, imageCoordinates = getWorldAndImageCoordinates(frameNum)
+frameNum = 4
+worldPoints, imageCoordinates, pointsFromProjectionMatrix = getWorldAndImageCoordinates(frameNum)
+
+showWithScatter(pointsFromProjectionMatrix)
 show2D(imageCoordinates)
 show3D(worldPoints)
